@@ -1,0 +1,216 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <iomanip>
+#include <string>
+#include <fstream>
+#include <nlohmann/json.hpp>
+using namespace std;
+using json = nlohmann::json;
+
+struct Process {
+    int id;
+    int arrival_time;
+    int burst_time;
+    int completion_time;
+    int waiting_time;
+    int turnaround_time;
+    int priority;
+};
+
+// Input processes
+void inputProcesses(vector<Process>& processes) {
+    int n;
+    cout << "Enter the number of processes: ";
+    cin >> n;
+
+    for (int i = 0; i < n; ++i) {
+        Process p;
+        p.id = i + 1;
+        cout << "\nProcess " << p.id << ":\n";
+        cout << "Arrival Time: ";
+        cin >> p.arrival_time;
+        cout << "Burst Time: ";
+        cin >> p.burst_time;
+        cout << "Priority: ";
+        cin >> p.priority;
+
+        processes.push_back(p);
+    }
+}
+
+// Display processes
+void displayProcesses(const vector<Process>& processes) {
+    cout << "\nProcess Details:\n";
+    cout << "ID\tArrival\tBurst\tPriority\n";
+    for (const auto& process : processes) {
+        cout << process.id << "\t" << process.arrival_time << "\t"
+            << process.burst_time << "\t" << process.priority << "\n";
+    }
+}
+
+// Calculate times for FCFS and SJN
+void calculateTimes(vector<Process>& processes) {
+    int current_time = 0;
+
+    for (auto& process : processes) {
+        if (current_time < process.arrival_time) {
+            current_time = process.arrival_time;
+        }
+        process.completion_time = current_time + process.burst_time;
+        process.turnaround_time = process.completion_time - process.arrival_time;
+        process.waiting_time = process.turnaround_time - process.burst_time;
+        current_time = process.completion_time;
+    }
+}
+
+// FCFS scheduling
+void fcfs(vector<Process>& processes) {
+    sort(processes.begin(), processes.end(), [](Process a, Process b) {
+        return a.arrival_time < b.arrival_time;
+        });
+    calculateTimes(processes);
+}
+
+// SJN scheduling
+void sjn(vector<Process>& processes) {
+    sort(processes.begin(), processes.end(), [](Process a, Process b) {
+        return a.arrival_time < b.arrival_time;
+        });
+
+    vector<Process> ready_queue;
+    int current_time = 0;
+
+    for (size_t i = 0; i < processes.size();) {
+        while (i < processes.size() && processes[i].arrival_time <= current_time) {
+            ready_queue.push_back(processes[i]);
+            i++;
+        }
+
+        if (!ready_queue.empty()) {
+            sort(ready_queue.begin(), ready_queue.end(), [](Process a, Process b) {
+                return a.burst_time < b.burst_time;
+                });
+
+            Process current = ready_queue.front();
+            ready_queue.erase(ready_queue.begin());
+
+            current.completion_time = current_time + current.burst_time;
+            current.turnaround_time = current.completion_time - current.arrival_time;
+            current.waiting_time = current.turnaround_time - current.burst_time;
+            current_time = current.completion_time;
+
+            for (auto& p : processes) {
+                if (p.id == current.id) {
+                    p = current;
+                    break;
+                }
+            }
+        }
+        else {
+            current_time++;
+        }
+    }
+}
+
+// Display results
+void displayResults(const vector<Process>& processes) {
+    double total_turnaround_time = 0, total_waiting_time = 0;
+    cout << "\nProcess Table:\n";
+    cout << "ID\tArrival\tBurst\tCompletion\tTurnaround\tWaiting\n";
+    for (const auto& p : processes) {
+        cout << p.id << "\t" << p.arrival_time << "\t" << p.burst_time
+            << "\t" << p.completion_time << "\t\t" << p.turnaround_time
+            << "\t\t" << p.waiting_time << "\n";
+        total_turnaround_time += p.turnaround_time;
+        total_waiting_time += p.waiting_time;
+    }
+
+    cout << fixed << setprecision(2);
+    cout << "\nAverage Turnaround Time: " << total_turnaround_time / processes.size() << "\n";
+    cout << "Average Waiting Time: " << total_waiting_time / processes.size() << "\n";
+}
+// Gantt Chart
+void displayGanttChart(const vector<Process>& processes) {
+    cout << "\nGantt Chart:\n";
+    for (const auto& p : processes) {
+        cout << "| P" << p.id << " " << string(p.burst_time, '-') << " ";
+    }
+    cout << "|\n";
+
+    int current_time = 0;
+    for (const auto& p : processes) {
+        cout << current_time << "\t";
+        current_time = p.completion_time;
+    }
+    cout << current_time << "\n";
+}
+
+// Save results to JSON
+void saveToJson(const vector<Process>& processes, const string& filename) {
+    json root;
+    for (const auto& process : processes) {
+        json p;
+        p["id"] = process.id;
+        p["arrival_time"] = process.arrival_time;
+        p["burst_time"] = process.burst_time;
+        p["completion_time"] = process.completion_time;
+        p["turnaround_time"] = process.turnaround_time;
+        p["waiting_time"] = process.waiting_time;
+        root.push_back(p);
+    }
+
+    ofstream file(filename);
+    file << root.dump(4);
+    file.close();
+    cout << "\nResults saved to " << filename << "\n";
+}
+
+int main() {
+    vector<Process> processes;
+    inputProcesses(processes);
+
+    cout << "Choose Scheduling Algorithm:\n1. FCFS\n2. SJN\nYour choice: ";
+    int choice;
+    cin >> choice;
+
+    if (choice == 1) {
+        fcfs(processes);
+    }
+    else if (choice == 2) {
+        sjn(processes);
+    }
+    else {
+        cout << "Invalid choice. Exiting.\n";
+        return 1;
+    }
+
+    displayResults(processes);
+
+    cout << "\nChoose Output Option:\n1. Turnaround Times\n2. Waiting Times\n3. Gantt Chart\n4. Save to JSON\nYour choice: ";
+    int output_choice;
+    cin >> output_choice;
+
+    switch (output_choice) {
+    case 1:
+        for (const auto& p : processes) {
+            cout << "Turnaround Time for Process " << p.id << ": " << p.turnaround_time << "\n";
+        }
+        break;
+    case 2:
+        for (const auto& p : processes) {
+            cout << "Waiting Time for Process " << p.id << ": " << p.waiting_time << "\n";
+        }
+        break;
+    case 3:
+        displayGanttChart(processes);
+        break;
+    case 4:
+        saveToJson(processes, "process_results.json");
+        break;
+    default:
+        cout << "Invalid output choice.";
+    }
+
+    return 0;
+}
